@@ -1,0 +1,32 @@
+# Include the license file
+include LICENSE
+
+# Include the README
+include README.md
+
+# Include the requirements file
+include requirements.txt
+
+# Include the project configuration
+include pyproject.toml
+
+# Include all Python files in the package
+recursive-include auto_codex *.py
+
+# Include the py.typed file for type hints
+include auto_codex/py.typed
+
+# Include test data files
+recursive-include tests *.py *.log
+
+# Exclude compiled Python files
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude __pycache__
+
+# Exclude development files
+exclude .coverage
+exclude .pytest_cache
+exclude *.egg-info
+exclude build
+exclude dist 
