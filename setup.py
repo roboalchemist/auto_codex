@@ -24,9 +24,9 @@ setup(
     description='Advanced automation framework for Codex AI with comprehensive health monitoring, multi-provider support, and powerful log parsing capabilities',
     long_description=long_description,
     long_description_content_type='text/markdown',
-    url='https://github.com/roboalchemist/auto_codex',
-    author='roboalchemist',
-    author_email='roboalchemist@users.noreply.github.com',
+    url='https://github.com/Joseph Schlesinger/auto_codex',
+    author='Joseph Schlesinger',
+    author_email='joe@schlesinger.io',
     license='MIT',
     
     # Classifiers help users find your project by categorizing it
@@ -82,8 +82,8 @@ setup(
     
     # Project URLs
     project_urls={
-        'Bug Reports': 'https://github.com/roboalchemist/auto_codex/issues',
-        'Source': 'https://github.com/roboalchemist/auto_codex',
+        'Bug Reports': 'https://github.com/Joseph Schlesinger/auto_codex/issues',
+        'Source': 'https://github.com/Joseph Schlesinger/auto_codex',
         'Documentation': 'https://auto-codex.readthedocs.io/',
     },
 ) 
