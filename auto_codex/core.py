@@ -9,9 +9,10 @@ import shlex
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any, Union, Callable
 import logging
 import time
+import json
 
 from .models import CodexRunResult, CodexSessionResult, ChangeType, ToolType
 from .parsers import CodexLogParser, CodexOutputParser
@@ -130,7 +131,8 @@ class CodexRun:
                  debug: bool = False,
                  validate_env: bool = True,
                  enable_health_monitoring: bool = True,
-                 dangerously_auto_approve_everything: bool = False):
+                 dangerously_auto_approve_everything: bool = False,
+                 on_json_line: Optional[Callable[[Dict], None]] = None):
         """
         Initialize a Codex run.
         
@@ -146,6 +148,7 @@ class CodexRun:
             validate_env: Whether to validate environment variables for the provider
             enable_health_monitoring: Whether to enable health monitoring for this run
             dangerously_auto_approve_everything: Skip all confirmation prompts (for testing)
+            on_json_line: Callback function to handle valid JSON lines from stdout
         """
         self.run_id = run_id or str(uuid.uuid4())
         self.prompt = prompt
@@ -157,6 +160,7 @@ class CodexRun:
         self.debug = debug
         self.enable_health_monitoring = enable_health_monitoring
         self.dangerously_auto_approve_everything = dangerously_auto_approve_everything
+        self.on_json_line = on_json_line
         
         # Validate provider configuration if requested
         if validate_env:
@@ -307,97 +311,34 @@ class CodexRun:
             print(f"DEBUG: Executing command: {shlex.join(cmd_parts)}")
             print(f"DEBUG: Environment CODEX_UNSAFE_ALLOW_NO_SANDBOX = {env.get('CODEX_UNSAFE_ALLOW_NO_SANDBOX')}")
             
-            # Start process for health monitoring
+            self.process = subprocess.Popen(
+                cmd_parts,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                cwd=self.writable_root,
+                env=env
+            )
+            
+            # Update health monitor with process ID
+            if self.health_monitor and self.health_info:
+                self.health_info.process_id = self.process.pid
+                self.health_monitor.heartbeat(self.run_id)
+
             with open(self.log_file, 'w') as log_f:
-                self.process = subprocess.Popen(
-                    cmd_parts,
-                    stdout=log_f,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    cwd=self.writable_root,
-                    env=env
-                )
-                
-                # Update health monitor with process ID
-                if self.health_monitor and self.health_info:
-                    self.health_info.process_id = self.process.pid
-                    self.health_monitor.heartbeat(self.run_id)
-                
-                # Monitor process with periodic heartbeats
-                start_time = time.time()
-                heartbeat_interval = 10.0  # seconds
-                last_heartbeat = start_time
-                
-                while self.process.poll() is None:
-                    current_time = time.time()
-                    
-                    # Check for timeout
-                    if current_time - start_time > self.timeout:
-                        self.process.terminate()
+                for line in iter(self.process.stdout.readline, ''):
+                    log_f.write(line)
+                    log_f.flush()
+
+                    if self.on_json_line:
                         try:
-                            self.process.wait(timeout=5)
-                        except subprocess.TimeoutExpired:
-                            self.process.kill()
-                        raise RuntimeError(f"Codex command timed out after {self.timeout} seconds")
-                    
-                    # Send heartbeat if interval elapsed
-                    if current_time - last_heartbeat > heartbeat_interval:
-                        runtime_seconds = current_time - start_time
-                        
-                        if self.health_monitor:
-                            metrics = AgentMetrics(
-                                runtime_seconds=runtime_seconds,
-                                last_activity=datetime.now()
-                            )
-                            self.health_monitor.heartbeat(self.run_id, metrics)
-                            
-                            # Get current health status for progress update
-                            health_info = self.health_monitor.get_agent_health(self.run_id)
-                            health_status = health_info.health.value if health_info else "unknown"
-                            agent_status = health_info.status.value if health_info else "unknown"
-                        else:
-                            health_status = "monitoring_disabled"
-                            agent_status = "running"
-                        
-                        # Print visible progress update
-                        print(f"💓 [{datetime.now().strftime('%H:%M:%S')}] Codex Agent Heartbeat:")
-                        print(f"     Runtime: {runtime_seconds:.1f}s / {self.timeout}s")
-                        print(f"   ❤️  Health: {health_status}")
-                        print(f"     Status: {agent_status}")
-                        print(f"     Model: {self.model} ({self.provider})")
-                        print(f"     Working: {self.writable_root}")
-                        
-                        # Try to get recent activity from log file
-                        if self.log_file and os.path.exists(self.log_file):
-                            try:
-                                with open(self.log_file, 'r') as f:
-                                    lines = f.readlines()
-                                    if lines:
-                                        # Get last few lines for recent activity
-                                        recent_lines = lines[-3:] if len(lines) >= 3 else lines
-                                        recent_activity = ' '.join(line.strip() for line in recent_lines)
-                                        # Truncate if too long
-                                        if len(recent_activity) > 100:
-                                            recent_activity = recent_activity[:97] + "..."
-                                        print(f"     Recent: {recent_activity}")
-                                    else:
-                                        print(f"     Recent: (waiting for output...)")
-                            except Exception:
-                                print(f"     Recent: (log file not accessible)")
-                        else:
-                            print(f"     Recent: (no log file yet)")
-                        
-                        print()  # Empty line for readability
-                        last_heartbeat = current_time
-                    
-                    time.sleep(0.1)  # Small sleep to prevent busy waiting
-                
-                # Process completed
-                self.process.wait()
+                            json_line = json.loads(line)
+                            self.on_json_line(json_line)
+                        except json.JSONDecodeError:
+                            pass # Ignore non-json lines
             
-            # Give a moment for the file to be written
-            time.sleep(0.1)
-            
+            self.process.wait(timeout=self.timeout)
+
             # Read the output
             with open(self.log_file, 'r') as log_f:
                 self.output = log_f.read()

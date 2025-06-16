@@ -12,14 +12,24 @@ import shutil
 import time
 import threading
 import importlib.util
+from datetime import datetime
+
+# Add the project root to the Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from dotenv import load_dotenv
+from auto_codex.core import CodexRun
+from auto_codex.health import get_health_monitor
+import pprint
 
 # Add auto_codex to path for examples
 sys.path.insert(0, '.')
 
 from auto_codex import CodexRun
 from examples.real_time_inspector_example import SimpleAgentInspector
+
+# Load environment variables from .env file
+load_dotenv()
 
 def create_two_sum_prompt():
     """Creates a prompt to solve the Two Sum LeetCode problem."""
@@ -34,6 +44,8 @@ Your task is to:
 4. Write clean, efficient code that solves the problem.
 
 Each problem will specify the expected filename and function name. Make sure to follow these exactly.
+
+Hint: To write the python code to a file, you can use `echo -e "your code here" >> your_file.py`.
 
 Create a Python file called 'two_sum.py' with a function named 'two_sum' that solves LeetCode Problem #1.
 
@@ -84,6 +96,12 @@ def verify_solution(directory: str) -> bool:
         print(f"❌ Verification failed with an error: {e}")
         return False
 
+def print_json_line(line: dict):
+    """Callback function to print JSON lines from the agent."""
+    print("------ Agent Output ------")
+    pprint.pprint(line)
+    print("--------------------------")
+
 def main():
     """Run the end-to-end example."""
     # Load .env file for API keys
@@ -92,37 +110,63 @@ def main():
         sys.exit(1)
 
     print("Auto-Codex End-to-End Example")
-    print("=" * 45)
-    
-    # The benchmark uses a temp directory, so we should too.
+    print("=============================================")
+
+    # Use a temporary directory for the agent to work in
     with tempfile.TemporaryDirectory() as temp_dir:
         print(f"📂 Working in temporary directory: {temp_dir}")
-        
-        # 1. Define the problem and create the run
-        prompt = create_two_sum_prompt()
-        
-        # This now mirrors the successful benchmark configuration
+
+        # --- Prompt Definition ---
+        # The benchmark separates the general instructions (system prompt) 
+        # from the specific task. This is more effective.
+        system_prompt = """You are a developer agent. You are being tested on your ability to solve LeetCode problems.
+You will be given a coding challenge that test fundamental programming concepts.
+
+Your task is to:
+1. Read the problem carefully.
+2. Write the Python code to solve the problem.
+3. Use the `apply_patch` tool with the 'Add File' syntax to create the file. This is the most reliable method. For example: `apply_patch '*** Begin Patch\\n*** Add File: new_file.py\\n+...file content...\\n*** End Patch'`
+- Pay close attention to formatting. The patch format is very strict; invisible characters or extra lines will cause it to fail.
+4. Create a Python file with the specified filename and implement the required function.
+5. Ensure your solution handles all the given test cases correctly.
+6. Run flake8 linting on the file to ensure there are no errors. Fix any linting errors that do come up.
+
+Each problem will specify the expected filename and function name. Make sure to follow these exactly."""
+
+        task_prompt = """Create a Python file called 'two_sum.py' with a function named 'two_sum' that solves LeetCode Problem #1.
+
+Problem: Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target. You may assume that each input would have exactly one solution, and you may not use the same element twice. You can return the answer in any order.
+
+Example:
+- Input: nums = [2,7,11,15], target = 9
+- Output: [0,1] (because nums[0] + nums[1] == 9)"""
+
+        # Combine the prompts
+        prompt = f"{system_prompt}\n\n{task_prompt}"
+
+        # --- Agent Execution ---
+        # 1. Initialize the CodexRun
         run = CodexRun(
             prompt=prompt,
-            model="gpt-4.1-mini",
+            model="gpt-4-1106-preview",
             provider="openai",
             writable_root=temp_dir,
-            timeout=300
+            timeout=180,
+            dangerously_auto_approve_everything=True,
+            on_json_line=print_json_line
         )
         
         print(f"🚀 Starting agent run: {run.run_id}")
         
-        # 2. Execute the run
-        # The SimpleAgentInspector is not compatible with the restored CodexRun,
-        # so we will execute directly and check the result at the end.
-        run.execute(log_dir=temp_dir)
-        
-        # 3. Final status check
+        # The execution is now synchronous and will print in real-time
+        result = run.execute()
+
+        # 4. Final status check
         print("\n🏁 Run complete!")
         print(f"   Success: {run.success}")
         print(f"   Error: {run.error}")
 
-        # 4. Verify the solution
+        # 5. Verify the solution
         print("\n🔍 Verifying the solution...")
         if verify_solution(temp_dir):
             print("✅✅✅ End-to-end test PASSED! ✅✅✅")
