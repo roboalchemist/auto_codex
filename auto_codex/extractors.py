@@ -43,9 +43,9 @@ class PatchExtractor(BaseExtractor):
     def extract(self, log_file: str, content: str) -> List[PatchData]:
         """Extract patch information from log content."""
         results = []
-        # This regex now correctly handles the double-escaped newlines
+        # This regex looks for Add File or Update File, then the file path, then the patch content
         patch_pattern = re.compile(
-            r"Update File:\s*(.*?)\s*@@.*?@@\s*(.*?)\*\*\* End Patch",
+            r"\*\*\* (?:Add|Update) File: (.*?)\n(.*?)\*\*\* End Patch",
             re.DOTALL | re.IGNORECASE
         )
 

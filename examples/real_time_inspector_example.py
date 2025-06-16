@@ -10,11 +10,12 @@ Demonstrates real-time agent inspection:
 
 import time
 import sys
+import threading
 from datetime import datetime
 from typing import List, Dict
 
 # Add auto_codex to path for examples
-sys.path.insert(0, 'auto_codex')
+sys.path.insert(0, '.')
 
 from auto_codex import CodexRun, CodexSession, get_health_monitor
 
@@ -49,7 +50,23 @@ class SimpleAgentInspector:
                 status_icon = self._get_status_icon(health.status.value)
                 health_icon = self._get_health_icon(health.health.value)
                 
-                print(f"  {i}. {run.run_id[:8]}: {status_icon} {health.status.value} | {health_icon} {health.health.value} | {health.runtime_seconds:.1f}s")
+                output_preview = ""
+                if hasattr(run, 'json_lines') and run.json_lines:
+                    last_line = run.json_lines[-1]
+                    if isinstance(last_line, dict):
+                        line_type = last_line.get('type')
+                        if line_type == 'message' and last_line.get('role') == 'assistant' and 'content' in last_line:
+                            content = last_line['content']
+                            if isinstance(content, list) and content and isinstance(content[0], dict) and 'text' in content[0]:
+                                output_preview = f" | Assistant: {repr(content[0]['text'])}"
+                        elif line_type == 'function_call':
+                            tool_name = last_line.get('name', 'unknown_tool')
+                            output_preview = f" | Tool Call: {tool_name}"
+                        elif line_type == 'function_call_output':
+                            output = str(last_line.get('output'))
+                            output_preview = f" | Tool Output: {repr(output)}"
+
+                print(f"  {i}. {run.run_id[:8]}: {status_icon} {health.status.value} | {health_icon} {health.health.value} | {health.runtime_seconds:.1f}s{output_preview}")
                 
                 self._log_event(run.run_id, health.status.value, health.health.value)
         
@@ -97,15 +114,16 @@ class SimpleAgentInspector:
     
     def _get_status_icon(self, status: str) -> str:
         return {
-            "running": " ", "completed": "✅", "failed": "❌",
-            "initializing": " ", "cancelled": "", "timeout": ""
-        }.get(status, "✅")
+            "running": "🏃", "completed": "✅", "failed": "❌",
+            "initializing": "⏳", "cancelled": "🛑", "timeout": "⏰",
+            "waiting_approval": "🤔"
+        }.get(status, "❓")
     
     def _get_health_icon(self, health: str) -> str:
         return {
-            "healthy": "✅", "degraded": "✅", 
-            "unhealthy": "❌", "unknown": "✅"
-        }.get(health, "✅")
+            "healthy": "💚", "degraded": "💛",
+            "unhealthy": "💔", "unknown": "❓"
+        }.get(health, "❓")
     
     def _format_time(self) -> str:
         return datetime.now().strftime("%H:%M:%S")
@@ -143,6 +161,13 @@ def basic_monitoring_example():
         )
         runs.append(run)
         print(f"Created: {task[:25]}... (ID: {run.run_id[:8]})")
+
+    threads = []
+    for run in runs:
+        thread = threading.Thread(target=run.execute)
+        thread.daemon = True
+        threads.append(thread)
+        thread.start()
     
     # Start monitoring
     inspector.start_monitoring(runs, duration=10)
@@ -163,8 +188,13 @@ def detailed_inspection_example():
         model="gpt-4",
         provider="openai"
     )
-    
+
+    thread = threading.Thread(target=run.execute)
+    thread.daemon = True
+    thread.start()
+
     print(f"Inspecting agent: {run.run_id[:8]}...")
+    time.sleep(5)
     
     # Perform inspection
     inspection = inspector.inspect_agent(run)
@@ -206,6 +236,13 @@ def monitoring_dashboard_example():
         )
         runs.append(run)
         print(f"Dashboard: {name} started (ID: {run.run_id[:8]})")
+
+    threads = []
+    for run in runs:
+        thread = threading.Thread(target=run.execute)
+        thread.daemon = True
+        threads.append(thread)
+        thread.start()
     
     # Monitor and generate report
     inspector.start_monitoring(runs, duration=8)

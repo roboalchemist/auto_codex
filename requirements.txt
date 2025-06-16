@@ -1,6 +1,1 @@
-# Core dependencies for auto_codex
-pydantic>=2.0.0
-jinja2>=3.0.0
-pyyaml>=6.0.0
-colorama>=0.4.6
-requests>=2.25.0 
+python-dotenv 

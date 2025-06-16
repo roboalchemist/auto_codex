@@ -16,7 +16,8 @@ import time
 import argparse
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Tuple, Optional
-from auto_codex.auto_codex.core import CodexRun
+from auto_codex.core import CodexRun
+from dotenv import load_dotenv
 
 
 class BenchmarkTest:
@@ -351,6 +352,11 @@ def create_cli_parser(benchmark_name: str) -> argparse.ArgumentParser:
 
 def run_benchmark_cli(benchmark_class, benchmark_name: str):
     """Generic CLI runner for benchmarks"""
+
+    # Load environment variables from .env file
+    if not load_dotenv():
+        print("⚠️  Warning: .env file not found. Please create one with your API keys (e.g., OPENAI_API_KEY).")
+    
     parser = create_cli_parser(benchmark_name)
     args = parser.parse_args()
     
