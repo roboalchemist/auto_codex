@@ -29,7 +29,8 @@ class TestCodexRunSimple(unittest.TestCase):
         run = CodexRun(
             prompt=self.test_prompt,
             writable_root=self.temp_dir,
-            enable_health_monitoring=False
+            enable_health_monitoring=False,
+            validate_env=False
         )
         
         self.assertEqual(run.prompt, self.test_prompt)
@@ -39,7 +40,7 @@ class TestCodexRunSimple(unittest.TestCase):
 
     def test_get_changes_by_file_with_result(self):
         """Test get_changes_by_file when result exists."""
-        run = CodexRun(self.test_prompt, enable_health_monitoring=False)
+        run = CodexRun(self.test_prompt, enable_health_monitoring=False, validate_env=False)
         
         # Create test data
         test_change = CodexChange(
@@ -78,7 +79,7 @@ class TestCodexRunSimple(unittest.TestCase):
 
     def test_get_tools_used_with_result(self):
         """Test get_tools_used when result exists."""
-        run = CodexRun(self.test_prompt, enable_health_monitoring=False)
+        run = CodexRun(self.test_prompt, enable_health_monitoring=False, validate_env=False)
         
         # Create test tool usage
         tool_usage = [
@@ -103,7 +104,7 @@ class TestCodexRunSimple(unittest.TestCase):
 
     def test_health_methods_without_monitoring(self):
         """Test health-related methods when monitoring is disabled."""
-        run = CodexRun(self.test_prompt, enable_health_monitoring=False)
+        run = CodexRun(self.test_prompt, enable_health_monitoring=False, validate_env=False)
         
         # These should handle gracefully when monitoring is disabled
         self.assertIsNone(run.get_health_status())
@@ -113,7 +114,7 @@ class TestCodexRunSimple(unittest.TestCase):
 
     def test_runtime_calculation(self):
         """Test runtime calculation."""
-        run = CodexRun(self.test_prompt, enable_health_monitoring=False)
+        run = CodexRun(self.test_prompt, enable_health_monitoring=False, validate_env=False)
         
         # No start time
         self.assertEqual(run.get_runtime_seconds(), 0.0)
@@ -142,7 +143,8 @@ class TestCodexSessionSimple(unittest.TestCase):
         """Test CodexSession initialization with health monitoring disabled."""
         session = CodexSession(
             session_id=self.session_id,
-            enable_health_monitoring=False
+            enable_health_monitoring=False,
+            validate_env=False
         )
         
         self.assertEqual(session.session_id, self.session_id)
@@ -152,7 +154,8 @@ class TestCodexSessionSimple(unittest.TestCase):
         """Test that add_run inherits health monitoring setting."""
         session = CodexSession(
             session_id=self.session_id,
-            enable_health_monitoring=False
+            enable_health_monitoring=False,
+            validate_env=False
         )
         
         run = session.add_run("test prompt")
@@ -163,7 +166,8 @@ class TestCodexSessionSimple(unittest.TestCase):
         """Test health-related methods when monitoring is disabled."""
         session = CodexSession(
             session_id=self.session_id,
-            enable_health_monitoring=False
+            enable_health_monitoring=False,
+            validate_env=False
         )
         
         # Add some runs

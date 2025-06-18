@@ -153,6 +153,7 @@ class TestCodexRunProviderSupport(unittest.TestCase):
         mock_process.pid = 12345
         mock_process.poll.return_value = 0  # Process completed successfully
         mock_process.wait.return_value = None
+        mock_process.stdout.readline.side_effect = ["", ""]
         mock_subprocess.return_value = mock_process
         
         mock_file = MagicMock()
@@ -170,7 +171,8 @@ class TestCodexRunProviderSupport(unittest.TestCase):
             provider="gemini",
             model="gemini-pro",
             writable_root=self.temp_dir,
-            enable_health_monitoring=False
+            enable_health_monitoring=False,
+            validate_env=False
         )
         
         run.execute(self.temp_dir)
@@ -195,6 +197,7 @@ class TestCodexRunProviderSupport(unittest.TestCase):
         mock_process.pid = 12345
         mock_process.poll.return_value = 0  # Process completed successfully
         mock_process.wait.return_value = None
+        mock_process.stdout.readline.side_effect = ["", ""]
         mock_subprocess.return_value = mock_process
         
         mock_file = MagicMock()
@@ -214,7 +217,8 @@ class TestCodexRunProviderSupport(unittest.TestCase):
             prompt="test prompt",
             provider="openai",
             writable_root=self.temp_dir,
-            enable_health_monitoring=False
+            enable_health_monitoring=False,
+            validate_env=False
         )
         
         result = run.execute(self.temp_dir)

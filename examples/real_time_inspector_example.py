@@ -192,7 +192,7 @@ def detailed_inspection_example():
     thread = threading.Thread(target=run.execute)
     thread.daemon = True
     thread.start()
-
+    
     print(f"Inspecting agent: {run.run_id[:8]}...")
     time.sleep(5)
     

@@ -41,7 +41,8 @@ def test_sandbox_disabled():
             timeout=30,
             approval_mode='full-auto',
             dangerously_auto_approve_everything=True,
-            debug=True
+            debug=True,
+            validate_env=False  # Skip API key validation for testing
         )
         
         result = run.execute(log_dir=temp_dir)
@@ -103,7 +104,8 @@ def test_with_777_permissions():
             timeout=30,
             approval_mode='full-auto',
             dangerously_auto_approve_everything=True,
-            debug=True
+            debug=True,
+            validate_env=False  # Skip API key validation for testing
         )
         
         result = run.execute(log_dir=temp_dir)
@@ -151,7 +153,8 @@ def test_with_different_flags():
             timeout=30,
             approval_mode='full-auto',
             dangerously_auto_approve_everything=True,
-            debug=True
+            debug=True,
+            validate_env=False  # Skip API key validation for testing
         )
         
         # Manually override the command construction for testing
@@ -164,7 +167,7 @@ def test_with_different_flags():
             
             # Try with -w flag instead of --writable-root
             cmd_parts = [
-                "codex",
+                "auto-codex",
                 f"--model={run.model}",
                 f"--provider={run.provider}",
                 f"-w", temp_dir,  # Use -w instead of --writable-root

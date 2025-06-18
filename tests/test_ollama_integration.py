@@ -109,9 +109,9 @@ class TestOllamaIntegration(unittest.TestCase):
         """Test single-turn agent usage with real auto_codex library."""
         print("\n🧪 Testing single-turn agent usage...")
         
-        # Use OpenAI GPT-4.1 nano model instead of Ollama
-        model = "gpt-4.1-nano"
-        provider = "openai"
+        # Use Ollama model
+        model = "devstral" if self.devstral_available else "gemma:2b"
+        provider = "ollama"
         
         # Create CodexRun instance
         run = CodexRun(
@@ -122,7 +122,7 @@ class TestOllamaIntegration(unittest.TestCase):
             timeout=120,
             approval_mode="auto",
             debug=True,
-            validate_env=True,  # Enable env validation for OpenAI
+            validate_env=False,  # Skip env validation for testing
             dangerously_auto_approve_everything=True  # Skip confirmations for testing
         )
         
@@ -179,7 +179,7 @@ class TestOllamaIntegration(unittest.TestCase):
         print("\n🧪 Testing multi-turn agent session...")
         
         # Choose model based on availability
-        model = "devstral" if self.devstral_available else "llama3.1"
+        model = "devstral" if self.devstral_available else "gemma:2b"
         
         # Create CodexSession
         session = CodexSession(
@@ -277,7 +277,7 @@ class TestOllamaIntegration(unittest.TestCase):
         """Test error handling with invalid prompts."""
         print("\n🧪 Testing error handling and recovery...")
         
-        model = "devstral" if self.devstral_available else "llama3.1"
+        model = "devstral" if self.devstral_available else "gemma:2b"
         
         # Test with a timeout scenario
         run = CodexRun(
@@ -297,17 +297,35 @@ class TestOllamaIntegration(unittest.TestCase):
             result = run.execute(log_dir=self.test_dir)
             print("   Expected timeout but run completed normally")
         except Exception as e:
-            print(f"✅ Properly caught error: {type(e).__name__}: {e}")
-            self.assertIn("timeout", str(e).lower(), "Error should mention timeout")
-
-
-if __name__ == "__main__":
-    print("🧪 Running Ollama Integration Tests")
-    print("=" * 60)
-    print("  These tests use the real auto_codex library to wrap the OpenAI Codex CLI")
-    print("  Testing integration with Ollama backend and Devstral model")
-    print("  Tests include single-turn usage, multi-turn sessions, and error handling")
-    print()
+            print(f"✅ Timeout was correctly triggered: {e}")
+            self.assertIn("timed out", str(e).lower())
     
-    # Run tests with verbose output
-    unittest.main(verbosity=2, argv=['']) 
+    def test_integration_framework_structure(self):
+        """Test the basic structure of CodexRun and CodexSession."""
+        print("\n🧪 Testing integration framework structure...")
+        
+        # Test CodexRun instantiation
+        run = CodexRun(
+            prompt="Test prompt",
+            provider="ollama",
+            model="devstral",
+            writable_root=self.test_dir,
+            validate_env=False
+        )
+        self.assertIsNotNone(run.run_id)
+        
+        # Test CodexSession instantiation
+        session = CodexSession(
+            default_provider="ollama",
+            default_model="devstral",
+            validate_env=False
+        )
+        self.assertIsNotNone(session.session_id)
+        
+        # Test adding a run
+        session.add_run("Test prompt 2", writable_root=self.test_dir)
+        self.assertEqual(len(session.runs), 1)
+
+
+if __name__ == '__main__':
+    unittest.main() 

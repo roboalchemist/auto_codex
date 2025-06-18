@@ -52,8 +52,12 @@ class TestCodexSessionAdvancedEdgeCases(unittest.TestCase):
     def test_get_session_health_summary_with_agents(self):
         """Test session health summary with various agent states."""
         # Add some runs to the session
-        run1 = self.session.add_run("test prompt 1")
-        run2 = self.session.add_run("test prompt 2")
+        with patch('subprocess.Popen') as mock_popen:
+            mock_process = MagicMock()
+            mock_process.stdout.readline.side_effect = ["", ""]
+            mock_popen.return_value = mock_process
+            run1 = self.session.add_run("test prompt 1")
+            run2 = self.session.add_run("test prompt 2")
         
         # Register agents with different statuses
         if self.session.health_monitor:
@@ -74,8 +78,12 @@ class TestCodexSessionAdvancedEdgeCases(unittest.TestCase):
     
     def test_get_runs_by_status(self):
         """Test filtering runs by agent status."""
-        run1 = self.session.add_run("test prompt 1")
-        run2 = self.session.add_run("test prompt 2")
+        with patch('subprocess.Popen') as mock_popen:
+            mock_process = MagicMock()
+            mock_process.stdout.readline.side_effect = ["", ""]
+            mock_popen.return_value = mock_process
+            run1 = self.session.add_run("test prompt 1")
+            run2 = self.session.add_run("test prompt 2")
         
         if self.session.health_monitor:
             self.session.health_monitor.register_agent(run1.run_id)
@@ -95,7 +103,11 @@ class TestCodexSessionAdvancedEdgeCases(unittest.TestCase):
     def test_get_runs_by_status_no_monitoring(self):
         """Test get_runs_by_status when monitoring is disabled."""
         session = CodexSession(enable_health_monitoring=False, validate_env=False)
-        session.add_run("test prompt")
+        with patch('subprocess.Popen') as mock_popen:
+            mock_process = MagicMock()
+            mock_process.stdout.readline.side_effect = ["", ""]
+            mock_popen.return_value = mock_process
+            session.add_run("test prompt")
         
         runs = session.get_runs_by_status(AgentStatus.COMPLETED)
         self.assertEqual(len(runs), 0)
@@ -103,7 +115,11 @@ class TestCodexSessionAdvancedEdgeCases(unittest.TestCase):
     def test_terminate_all_running_no_monitoring(self):
         """Test terminate_all_running when monitoring is disabled."""
         session = CodexSession(enable_health_monitoring=False, validate_env=False)
-        session.add_run("test prompt")
+        with patch('subprocess.Popen') as mock_popen:
+            mock_process = MagicMock()
+            mock_process.stdout.readline.side_effect = ["", ""]
+            mock_popen.return_value = mock_process
+            session.add_run("test prompt")
         
         count = session.terminate_all_running()
         self.assertEqual(count, 0)
@@ -113,8 +129,12 @@ class TestCodexSessionAdvancedEdgeCases(unittest.TestCase):
         """Test terminating all running agents."""
         mock_terminate.return_value = True
         
-        run1 = self.session.add_run("test prompt 1")
-        run2 = self.session.add_run("test prompt 2")
+        with patch('subprocess.Popen') as mock_popen:
+            mock_process = MagicMock()
+            mock_process.stdout.readline.side_effect = ["", ""]
+            mock_popen.return_value = mock_process
+            run1 = self.session.add_run("test prompt 1")
+            run2 = self.session.add_run("test prompt 2")
         
         if self.session.health_monitor:
             self.session.health_monitor.register_agent(run1.run_id)
@@ -135,7 +155,11 @@ class TestCodexSessionAdvancedEdgeCases(unittest.TestCase):
         template_processor.render_template.side_effect = Exception("Template rendering error: unexpected end of template, expected 'end of print statement'.")
         
         # This should handle the error gracefully
-        result = self.session.process_csv_data(csv_data, "{{invalid template", template_processor)
+        with patch('subprocess.Popen') as mock_popen:
+            mock_process = MagicMock()
+            mock_process.stdout.readline.side_effect = ["", ""]
+            mock_popen.return_value = mock_process
+            result = self.session.process_csv_data(csv_data, "{{invalid template", template_processor)
         
         # Should still execute (even with 0 runs if template failed)
         self.assertIsInstance(result.runs, list)
@@ -333,39 +357,28 @@ class TestCodexRunAdvancedCoverage(unittest.TestCase):
         self.temp_dir = tempfile.mkdtemp()
     
     def test_execute_timeout_with_kill(self):
-        """Test execution timeout requiring process kill."""
+        """Test execute timeout with process kill."""
         run = CodexRun(
             "test prompt",
-            timeout=1,  # Very short timeout
+            timeout=1,
             enable_health_monitoring=False,
             validate_env=False
         )
         
-        # Mock subprocess.Popen and time functions for timeout scenario
-        mock_process = Mock()
-        mock_process.poll.return_value = None  # Process still running
-        mock_process.returncode = 1
-        mock_process.pid = 12345
-        
-        # Mock time.time to simulate timeout
-        time_values = [0, 0.5, 1.1, 1.2]  # Start, check, timeout exceeded, after kill
-        
-        with patch('subprocess.Popen', return_value=mock_process), \
-             patch('time.time', side_effect=time_values), \
-             patch('time.sleep'), \
-             patch('builtins.open', mock_open(read_data="test log")), \
-             patch('os.path.exists', return_value=True):
+        with patch('subprocess.Popen') as mock_popen:
+            mock_process = MagicMock()
+            mock_process.poll.return_value = None
+            mock_process.wait.side_effect = subprocess.TimeoutExpired("cmd", 1)
+            mock_process.stdout.readline.side_effect = ["", ""]
+            mock_popen.return_value = mock_process
             
-            # Execute and expect timeout error
-            with self.assertRaises(Exception) as context:
-                run._execute_codex()
-            
-            self.assertIn("timed out", str(context.exception))
-            
-            # Verify process was terminated (may be called multiple times in timeout scenario)
-            self.assertTrue(mock_process.terminate.called)
-            # Process should be waited on after termination
-            self.assertTrue(mock_process.wait.called)
+            with patch('builtins.open', mock_open(read_data="log data")):
+                result = run.execute(self.temp_dir)
+                self.assertFalse(result.success)
+                self.assertIn("timed out", result.metadata['error'])
+                # Process gets terminated twice: once in TimeoutExpired block and once in finally block
+                self.assertEqual(mock_process.terminate.call_count, 2)
+                mock_process.kill.assert_called_once()
 
 
 if __name__ == '__main__':

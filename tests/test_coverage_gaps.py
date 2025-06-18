@@ -35,6 +35,7 @@ class TestCoreUncoveredLines(unittest.TestCase):
         mock_process.returncode = 1
         mock_process.pid = 12345
         mock_process.wait.side_effect = subprocess.TimeoutExpired("cmd", 5)  # Timeout on wait
+        mock_process.stdout.readline.side_effect = ["", ""] # Prevent hanging
         mock_popen.return_value = mock_process
         
         # Mock time progression to trigger timeout

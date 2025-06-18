@@ -3,6 +3,7 @@ import tempfile
 import os
 import shutil
 import json
+import re
 from auto_codex.extractors import (
     BaseExtractor, PatchExtractor, CommandExtractor, ToolUsageExtractor, 
     ChangeDetector, CustomExtractor, GenericToolExtractor
@@ -11,6 +12,7 @@ from auto_codex.models import (
     PatchData, CodexCommand, ToolUsage, CodexChange, DiscoveredTool,
     ChangeType, ToolType
 )
+from unittest.mock import patch, MagicMock
 
 
 class TestBaseExtractor(unittest.TestCase):
@@ -107,12 +109,18 @@ class TestPatchExtractorEdgeCases(unittest.TestCase):
         extractor = PatchExtractor(file_pattern=r"\.py$")
         extractor.file_pattern = re.compile(r"\.py$")
         
-        patch_content = "Update File: script.py @@...@@ some diff content *** End Patch"
+        patch_content = "*** Begin Patch\n*** Update File: script.py\n@@ -1,3 +1,5 @@\n+def new_function():\n+    pass\n*** End Patch"
         log_content = json.dumps({
+            "type": "function_call_output",
+            "call_id": "call_123",
             "name": "shell",
             "arguments": json.dumps({"command": ["apply_patch", patch_content]})
         })
         
+        # Write to the log file to test actual extraction
+        with open(self.log_file, 'w') as f:
+            f.write(log_content)
+            
         results = extractor.extract(self.log_file, log_content)
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].file_path, "script.py")

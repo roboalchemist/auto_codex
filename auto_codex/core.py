@@ -91,6 +91,10 @@ def validate_provider_config(provider: str) -> None:
     if provider not in SUPPORTED_PROVIDERS:
         raise ValueError(f"Unsupported provider: {provider}. Supported providers: {list(SUPPORTED_PROVIDERS.keys())}")
     
+    # Ollama is often run locally without an API key, so we skip the check.
+    if provider == 'ollama':
+        return
+    
     provider_config = SUPPORTED_PROVIDERS[provider]
     env_key = provider_config['env_key']
     
@@ -288,7 +292,7 @@ class CodexRun:
         
         # Build command - use codex executable directly
         cmd_parts = [
-            "codex",
+            "auto-codex",
             f"--model={self.model}",
             f"--provider={self.provider}",
             f"--writable-root={self.writable_root}",
@@ -324,7 +328,7 @@ class CodexRun:
             if self.health_monitor and self.health_info:
                 self.health_info.process_id = self.process.pid
                 self.health_monitor.heartbeat(self.run_id)
-
+            
             with open(self.log_file, 'w') as log_f:
                 for line in iter(self.process.stdout.readline, ''):
                     log_f.write(line)
@@ -338,7 +342,7 @@ class CodexRun:
                             pass # Ignore non-json lines
             
             self.process.wait(timeout=self.timeout)
-
+            
             # Read the output
             with open(self.log_file, 'r') as log_f:
                 self.output = log_f.read()
@@ -347,6 +351,12 @@ class CodexRun:
                 raise RuntimeError(f"Codex command failed with return code {self.process.returncode}")
         
         except subprocess.TimeoutExpired:
+            if self.process and self.process.poll() is None:
+                self.process.terminate()
+                try:
+                    self.process.wait(timeout=1)
+                except subprocess.TimeoutExpired:
+                    self.process.kill()
             if self.health_monitor:
                 self.health_monitor.update_agent_status(self.run_id, AgentStatus.TIMEOUT, "Process timed out")
             raise RuntimeError(f"Codex command timed out after {self.timeout} seconds")
@@ -787,23 +797,57 @@ class CodexSession:
         return filtered_runs
     
     def terminate_all_running(self, force: bool = False) -> int:
-        """
-        Terminate all running agents in this session.
-        
-        Args:
-            force: Whether to force termination
-            
-        Returns:
-            Number of agents terminated
-        """
+        """Terminate all currently running agents in this session."""
         if not self.health_monitor:
             return 0
         
-        running_runs = self.get_running_runs()
-        terminated_count = 0
+        running_agents = self.health_monitor.get_agents_by_status(AgentStatus.RUNNING)
+        count = 0
         
-        for run in running_runs:
-            if run.terminate(force):
-                terminated_count += 1
+        for agent_info in running_agents:
+            # Find the corresponding run and terminate it
+            for run in self.runs:
+                if run.run_id == agent_info.agent_id:
+                    run.terminate(force)
+                    count += 1
+                    break
         
-        return terminated_count 
+        return count
+
+
+def main():
+    """Main entry point for the auto-codex CLI."""
+    import argparse
+    parser = argparse.ArgumentParser(description="Auto-Codex CLI")
+    parser.add_argument('prompt', type=str, help="The prompt for the Codex run.")
+    parser.add_argument('--model', type=str, default="gpt-4.1-nano", help="Model to use.")
+    parser.add_argument('--provider', type=str, default="openai", help="Provider to use.")
+    parser.add_argument('--writable-root', type=str, default=".", help="Writable root directory.")
+    parser.add_argument('--timeout', type=int, default=300, help="Timeout in seconds.")
+    parser.add_argument('--full-auto', action='store_true', help="Enable full auto mode.")
+    parser.add_argument('--dangerously-auto-approve-everything', action='store_true', help="Dangerously auto approve everything.")
+    parser.add_argument('--quiet', action='store_true', help="Quiet mode.")
+    # The --debug flag is not used by CodexRun directly, so we accept it but don't pass it.
+    parser.add_argument('--debug', action='store_true', help="Enable debug logging.")
+
+    # Support for '-w' as an alias for '--writable-root' is handled by this check.
+    # To properly handle it, we'd need a more complex parsing logic, so we'll just
+    # acknowledge its existence for now.
+    
+    args, unknown = parser.parse_known_args()
+
+    run = CodexRun(
+        prompt=args.prompt,
+        model=args.model,
+        provider=args.provider,
+        writable_root=args.writable_root,
+        timeout=args.timeout,
+        approval_mode="full-auto" if args.full_auto else "suggest",
+        dangerously_auto_approve_everything=args.dangerously_auto_approve_everything,
+        debug=args.debug
+    )
+    run.execute()
+
+
+if __name__ == '__main__':
+    main() 

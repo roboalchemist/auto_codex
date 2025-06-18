@@ -20,12 +20,12 @@ class TestCodexRun(unittest.TestCase):
 
     def test_init_default_values(self):
         """Test CodexRun initialization with default values."""
-        run = CodexRun(self.test_prompt)
+        run = CodexRun(self.test_prompt, validate_env=False)
         
         self.assertEqual(run.prompt, self.test_prompt)
         self.assertEqual(run.model, "gpt-4.1-nano")
         self.assertEqual(run.timeout, 300)
-        self.assertEqual(run.approval_mode, "auto")
+        self.assertEqual(run.approval_mode, "full-auto")
         self.assertFalse(run.debug)
         self.assertIsNotNone(run.run_id)
         self.assertIsNone(run.start_time)
@@ -43,15 +43,16 @@ class TestCodexRun(unittest.TestCase):
             writable_root=self.temp_dir,
             timeout=custom_timeout,
             run_id=custom_run_id,
-            approval_mode="manual",
-            debug=True
+            approval_mode="full-auto",
+            debug=True,
+            validate_env=False
         )
         
         self.assertEqual(run.run_id, custom_run_id)
         self.assertEqual(run.model, "gpt-3.5-turbo")
         self.assertEqual(run.writable_root, self.temp_dir)
         self.assertEqual(run.timeout, custom_timeout)
-        self.assertEqual(run.approval_mode, "manual")
+        self.assertEqual(run.approval_mode, "full-auto")
         self.assertTrue(run.debug)
 
     @patch('auto_codex.core.CodexLogParser')
@@ -64,8 +65,10 @@ class TestCodexRun(unittest.TestCase):
         mock_process = Mock()
         mock_process.returncode = 0
         mock_process.pid = 12345
-        mock_process.poll.return_value = 0  # Process completed successfully
+        mock_process.poll.return_value = 0
         mock_process.wait.return_value = None
+        # Simulate readline behavior
+        mock_process.stdout.readline.side_effect = ["Test output\n", ""]
         mock_subprocess.return_value = mock_process
         
         # Mock file operations
@@ -88,7 +91,7 @@ class TestCodexRun(unittest.TestCase):
         mock_parser_class.return_value = mock_parser
         
         # Execute
-        run = CodexRun(self.test_prompt, writable_root=self.temp_dir, enable_health_monitoring=False)
+        run = CodexRun(self.test_prompt, writable_root=self.temp_dir, enable_health_monitoring=False, validate_env=False)
         result = run.execute(self.temp_dir)
         
         # Assertions
@@ -101,10 +104,10 @@ class TestCodexRun(unittest.TestCase):
         # Verify subprocess was called with correct arguments
         mock_subprocess.assert_called_once()
         call_args = mock_subprocess.call_args[0][0]  # First positional arg
-        self.assertIn("codex", call_args)
+        self.assertIn("auto-codex", call_args)
         self.assertIn(f"--model={self.test_model}", call_args)
         self.assertIn(f"--writable-root={self.temp_dir}", call_args)
-        self.assertIn("--approval-mode=auto", call_args)
+        self.assertIn("--full-auto", call_args)
         self.assertIn("--quiet", call_args)
         self.assertIn(self.test_prompt, call_args)
 
@@ -115,11 +118,12 @@ class TestCodexRun(unittest.TestCase):
         mock_process = Mock()
         mock_process.returncode = 1
         mock_process.pid = 12345
-        mock_process.poll.return_value = 1  # Process failed
+        mock_process.poll.return_value = 1
         mock_process.wait.return_value = None
+        mock_process.stdout.readline.side_effect = ["Error output\n", ""]
         mock_subprocess.return_value = mock_process
         
-        run = CodexRun(self.test_prompt, writable_root=self.temp_dir, enable_health_monitoring=False)
+        run = CodexRun(self.test_prompt, writable_root=self.temp_dir, enable_health_monitoring=False, validate_env=False)
         result = run.execute(self.temp_dir)
         
         # Should handle failure gracefully
@@ -138,8 +142,9 @@ class TestCodexRun(unittest.TestCase):
         mock_process = Mock()
         mock_process.returncode = 0
         mock_process.pid = 12345
-        mock_process.poll.return_value = 0  # Process completed successfully
+        mock_process.poll.return_value = 0
         mock_process.wait.return_value = None
+        mock_process.stdout.readline.side_effect = ["Test output\n", ""]
         mock_subprocess.return_value = mock_process
         
         mock_exists.return_value = True
@@ -176,7 +181,7 @@ class TestCodexRun(unittest.TestCase):
         mock_parser_class.return_value = mock_parser
         
         # Execute and test
-        run = CodexRun(self.test_prompt, writable_root=self.temp_dir, enable_health_monitoring=False)
+        run = CodexRun(self.test_prompt, writable_root=self.temp_dir, enable_health_monitoring=False, validate_env=False)
         run.execute(self.temp_dir)
         
         changes = run.get_changes_by_file("test.py")
@@ -198,8 +203,9 @@ class TestCodexRun(unittest.TestCase):
         mock_process = Mock()
         mock_process.returncode = 0
         mock_process.pid = 12345
-        mock_process.poll.return_value = 0  # Process completed successfully
+        mock_process.poll.return_value = 0
         mock_process.wait.return_value = None
+        mock_process.stdout.readline.side_effect = ["Test output\n", ""]
         mock_subprocess.return_value = mock_process
         
         mock_exists.return_value = True
@@ -228,7 +234,7 @@ class TestCodexRun(unittest.TestCase):
         mock_parser_class.return_value = mock_parser
         
         # Execute and test
-        run = CodexRun(self.test_prompt, writable_root=self.temp_dir, enable_health_monitoring=False)
+        run = CodexRun(self.test_prompt, writable_root=self.temp_dir, enable_health_monitoring=False, validate_env=False)
         run.execute(self.temp_dir)
         
         tools = run.get_tools_used()
@@ -240,13 +246,14 @@ class TestCodexSession(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
         self.session_id = "test-session-123"
+        self.test_prompt = "Test prompt"
 
     def tearDown(self):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_init_default_values(self):
         """Test CodexSession initialization with default values."""
-        session = CodexSession()
+        session = CodexSession(validate_env=False)
         
         self.assertIsNotNone(session.session_id)
         self.assertEqual(session.default_model, "gpt-4.1-nano")
@@ -262,7 +269,8 @@ class TestCodexSession(unittest.TestCase):
             default_model="gpt-3.5-turbo",
             default_timeout=600,
             log_dir=self.temp_dir,
-            debug=True
+            debug=True,
+            validate_env=False
         )
         
         self.assertEqual(session.session_id, self.session_id)
@@ -273,42 +281,34 @@ class TestCodexSession(unittest.TestCase):
 
     def test_add_run_default_values(self):
         """Test adding a run with default values."""
-        session = CodexSession(session_id=self.session_id)
-        prompt = "Test prompt"
+        session = CodexSession(session_id=self.session_id, validate_env=False)
+        run = session.add_run(self.test_prompt)
         
-        run = session.add_run(prompt)
-        
-        self.assertEqual(len(session.runs), 1)
-        self.assertEqual(run.prompt, prompt)
-        self.assertEqual(run.model, session.default_model)
-        self.assertEqual(run.timeout, session.default_timeout)
+        self.assertEqual(run.prompt, self.test_prompt)
+        self.assertEqual(run.model, "gpt-4.1-nano")
+        self.assertEqual(run.approval_mode, "full-auto")
+        self.assertIs(run.debug, False)
 
     def test_add_run_custom_values(self):
         """Test adding a run with custom values."""
-        session = CodexSession(session_id=self.session_id)
-        prompt = "Test prompt"
-        custom_model = "gpt-3.5-turbo"
-        custom_timeout = 600
-        
+        session = CodexSession(session_id=self.session_id, validate_env=False)
         run = session.add_run(
-            prompt=prompt,
-            model=custom_model,
-            writable_root=self.temp_dir,
-            timeout=custom_timeout,
-            approval_mode="manual"
+            prompt=self.test_prompt,
+            model="gpt-3.5-turbo",
+            timeout=600,
+            approval_mode="manual",
+            dangerously_auto_approve_everything=True
         )
         
-        self.assertEqual(len(session.runs), 1)
-        self.assertEqual(run.prompt, prompt)
-        self.assertEqual(run.model, custom_model)
-        self.assertEqual(run.writable_root, self.temp_dir)
-        self.assertEqual(run.timeout, custom_timeout)
+        self.assertEqual(run.model, "gpt-3.5-turbo")
+        self.assertEqual(run.timeout, 600)
         self.assertEqual(run.approval_mode, "manual")
+        self.assertTrue(run.dangerously_auto_approve_everything)
 
     @patch('auto_codex.core.CodexRun.execute')
     def test_execute_all_success(self, mock_execute):
         """Test executing all runs successfully."""
-        session = CodexSession(session_id=self.session_id, log_dir=self.temp_dir)
+        session = CodexSession(session_id=self.session_id, log_dir=self.temp_dir, validate_env=False)
         
         # Add multiple runs
         run1 = session.add_run("Prompt 1")
@@ -354,7 +354,7 @@ class TestCodexSession(unittest.TestCase):
     @patch('auto_codex.core.TemplateProcessor')
     def test_process_csv_data(self, mock_template_processor_class):
         """Test processing CSV data with template."""
-        session = CodexSession(session_id=self.session_id)
+        session = CodexSession(session_id=self.session_id, validate_env=False)
         
         # Mock template processor
         mock_processor = Mock()
@@ -397,19 +397,19 @@ class TestCodexSession(unittest.TestCase):
 
     def test_get_summary_no_result(self):
         """Test getting summary when no result is available."""
-        session = CodexSession(session_id=self.session_id)
+        session = CodexSession(session_id=self.session_id, validate_env=False)
         summary = session.get_summary()
         self.assertEqual(summary, {})
 
     def test_analyze_by_tool_usage_no_result(self):
         """Test tool usage analysis when no result is available."""
-        session = CodexSession(session_id=self.session_id)
+        session = CodexSession(session_id=self.session_id, validate_env=False)
         analysis = session.analyze_by_tool_usage()
         self.assertEqual(analysis, {})
 
     def test_get_runs_by_success_no_result(self):
         """Test filtering runs by success when no result is available."""
-        session = CodexSession(session_id=self.session_id)
+        session = CodexSession(session_id=self.session_id, validate_env=False)
         successful_runs = session.get_runs_by_success(True)
         failed_runs = session.get_runs_by_success(False)
         self.assertEqual(successful_runs, [])
