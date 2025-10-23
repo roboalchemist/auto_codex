@@ -1,3 +1,8 @@
+---
+gitea: none
+include_toc: true
+---
+
 # Codex Interaction Library
 
 A comprehensive Python library for interacting with Codex, parsing logs, and managing Codex runs. Each run of Codex is represented as its own class with parsing capabilities for outputs.
